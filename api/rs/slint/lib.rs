@@ -428,6 +428,21 @@ pub mod platform {
     pub mod software_renderer {
         pub use i_slint_renderer_software::*;
     }
+
+    /// This module contains the Skia-based Vulkan renderer for texture rendering.
+    ///
+    /// It is only enabled when the `renderer-skia-vulkan` Slint feature is enabled.
+    #[cfg(feature = "renderer-skia-vulkan")]
+    pub mod skia_renderer {
+        /// A Skia-based Vulkan renderer for rendering Slint UI to an existing Vulkan image.
+        ///
+        /// This renderer does NOT manage swapchain acquisition or presentation. Instead, you
+        /// provide a target image each frame, and Slint renders the UI onto it.
+        ///
+        /// This is designed for integration with game engines or other Vulkan applications
+        /// that already have their own rendering pipeline.
+        pub use i_slint_renderer_skia::vulkan_overlay_surface::SkiaVulkanTextureRenderer;
+    }
 }
 
 #[i_slint_core_macros::slint_doc]

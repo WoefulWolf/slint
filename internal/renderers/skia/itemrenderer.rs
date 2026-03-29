@@ -601,29 +601,29 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
                 let (logical_offset, path_events): (crate::euclid::Vector2D<f32, LogicalPx>, _) =
                     path.fitted_path_events(item_rc)?;
 
-                let mut skpath = skia_safe::Path::new();
+                let mut path_builder = skia_safe::PathBuilder::new();
 
                 for x in path_events.iter() {
                     match x {
                         lyon_path::Event::Begin { at } => {
-                            skpath.move_to(to_skia_point(
+                            path_builder.move_to(to_skia_point(
                                 LogicalPoint::from_untyped(at) * self.scale_factor,
                             ));
                         }
                         lyon_path::Event::Line { from: _, to } => {
-                            skpath.line_to(to_skia_point(
+                            path_builder.line_to(to_skia_point(
                                 LogicalPoint::from_untyped(to) * self.scale_factor,
                             ));
                         }
                         lyon_path::Event::Quadratic { from: _, ctrl, to } => {
-                            skpath.quad_to(
+                            path_builder.quad_to(
                                 to_skia_point(LogicalPoint::from_untyped(ctrl) * self.scale_factor),
                                 to_skia_point(LogicalPoint::from_untyped(to) * self.scale_factor),
                             );
                         }
 
                         lyon_path::Event::Cubic { from: _, ctrl1, ctrl2, to } => {
-                            skpath.cubic_to(
+                            path_builder.cubic_to(
                                 to_skia_point(
                                     LogicalPoint::from_untyped(ctrl1) * self.scale_factor,
                                 ),
@@ -635,12 +635,13 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
                         }
                         lyon_path::Event::End { last: _, first: _, close } => {
                             if close {
-                                skpath.close();
+                                path_builder.close();
                             }
                         }
                     }
                 }
 
+                let skpath: skia_safe::Path = path_builder.snapshot();
                 (logical_offset * self.scale_factor, skpath).into()
             }) {
                 Some(offset_and_path) => offset_and_path,
