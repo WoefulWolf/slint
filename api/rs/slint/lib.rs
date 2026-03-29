@@ -441,7 +441,7 @@ pub mod platform {
         ///
         /// This is designed for integration with game engines or other Vulkan applications
         /// that already have their own rendering pipeline.
-        pub use i_slint_renderer_skia::vulkan_overlay_surface::SkiaVulkanTextureRenderer;
+        pub use i_slint_renderer_skia::vulkan_texture_surface::SkiaVulkanTextureRenderer;
     }
 }
 

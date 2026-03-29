@@ -52,7 +52,7 @@ pub mod metal_surface;
 pub mod d3d_surface;
 
 #[cfg(skia_backend_vulkan)]
-pub mod vulkan_overlay_surface;
+pub mod vulkan_texture_surface;
 #[cfg(skia_backend_vulkan)]
 pub mod vulkan_surface;
 
