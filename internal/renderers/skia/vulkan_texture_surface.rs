@@ -112,29 +112,16 @@ impl SkiaVulkanTextureRenderer {
             let get_proc = |of| unsafe {
                 let result = match of {
                     skia_safe::gpu::vk::GetProcOf::Instance(instance, name) => {
-                        let name_cstr = std::ffi::CStr::from_ptr(name);
-                        let proc = library.get_instance_proc_addr(
+                        library.get_instance_proc_addr(
                             ash::vk::Instance::from_raw(instance as _),
                             name,
-                        );
-                        if proc.is_none() {
-                            eprintln!(
-                                "[Skia] WARNING: Failed to get instance proc: {:?}",
-                                name_cstr
-                            );
-                        }
-                        proc
+                        )
                     }
                     skia_safe::gpu::vk::GetProcOf::Device(vk_device, name) => {
-                        let name_cstr = std::ffi::CStr::from_ptr(name);
-                        let proc = (instance.fns().v1_0.get_device_proc_addr)(
+                        (instance.fns().v1_0.get_device_proc_addr)(
                             ash::vk::Device::from_raw(vk_device as _),
                             name,
-                        );
-                        if proc.is_none() {
-                            eprintln!("[Skia] WARNING: Failed to get device proc: {:?}", name_cstr);
-                        }
-                        proc
+                        )
                     }
                 };
 
@@ -144,38 +131,40 @@ impl SkiaVulkanTextureRenderer {
                 }
             };
 
-            eprintln!("[Skia] Creating BackendContext...");
+            // Tell Skia which device extensions are actually enabled so it doesn't
+            // try to use features that are available but not enabled on the device.
+            let enabled_device_exts: Vec<&str> = [
+                (enabled_extensions.khr_swapchain, "VK_KHR_swapchain"),
+                (enabled_extensions.khr_get_memory_requirements2, "VK_KHR_get_memory_requirements2"),
+                (enabled_extensions.khr_dedicated_allocation, "VK_KHR_dedicated_allocation"),
+                (enabled_extensions.khr_external_memory, "VK_KHR_external_memory"),
+                (enabled_extensions.khr_sampler_ycbcr_conversion, "VK_KHR_sampler_ycbcr_conversion"),
+                (enabled_extensions.khr_maintenance1, "VK_KHR_maintenance1"),
+                (enabled_extensions.khr_maintenance2, "VK_KHR_maintenance2"),
+                (enabled_extensions.khr_maintenance3, "VK_KHR_maintenance3"),
+            ].iter().filter(|(enabled, _)| *enabled).map(|(_, name)| *name).collect();
+
+            eprintln!("[Skia] Creating BackendContext with {} device extensions...", enabled_device_exts.len());
             let mut backend_context = unsafe {
-                skia_safe::gpu::vk::BackendContext::new(
+                skia_safe::gpu::vk::BackendContext::new_with_extensions(
                     instance.handle().as_raw() as _,
                     physical_device.handle().as_raw() as _,
                     device.handle().as_raw() as _,
                     (queue.handle().as_raw() as _, queue.queue_index() as _),
                     &get_proc,
+                    &[],
+                    &enabled_device_exts,
                 )
             };
 
-            // Workaround for drivers that report Vulkan 1.4 but don't support VK_EXT_host_image_copy.
-            // Skia probes for Vulkan 1.4 functions like vkTransitionImageLayout and vkCopyMemoryToImage
-            // which are part of this optional extension. If the extension isn't available, we cap
-            // Skia's max API version to 1.3 to prevent it from trying to load these functions.
+            // Cap Skia to Vulkan 1.3 unconditionally. Skia doesn't need 1.4 features
+            // for UI overlay rendering, and many drivers (especially AMD) fail when Skia
+            // probes for optional 1.4 functions like vkTransitionImageLayout from
+            // VK_EXT_host_image_copy.
             // See: https://github.com/rust-skia/rust-skia/issues/513
-            let has_host_image_copy = extensions.ext_host_image_copy;
-            let api_version = props.api_version;
-            if api_version.major >= 1 && api_version.minor >= 4 && !has_host_image_copy {
-                eprintln!(
-                    "[Skia] WARNING: Device reports Vulkan {}.{} but lacks VK_EXT_host_image_copy",
-                    api_version.major, api_version.minor
-                );
-                eprintln!(
-                    "[Skia] Capping Skia max API version to 1.3 to avoid missing function errors"
-                );
-                // Version format: major << 22 | minor << 12 | patch
-                // Vulkan 1.3.0 = (1 << 22) | (3 << 12) | 0 = 4206592
-                let vk_1_3: u32 = (1 << 22) | (3 << 12);
-                backend_context.set_max_api_version(vk_1_3);
-            }
-            eprintln!("[Skia] BackendContext created successfully");
+            let vk_1_3: u32 = (1 << 22) | (3 << 12);
+            backend_context.set_max_api_version(vk_1_3);
+            eprintln!("[Skia] BackendContext created successfully (capped to Vulkan 1.3)");
 
             eprintln!("[Skia] Calling make_vulkan (DirectContext creation)...");
             let context = skia_safe::gpu::direct_contexts::make_vulkan(&backend_context, None);
